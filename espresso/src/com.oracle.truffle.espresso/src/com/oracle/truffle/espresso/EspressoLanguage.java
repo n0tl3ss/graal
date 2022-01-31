@@ -50,16 +50,19 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Symbols;
 import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.descriptors.Utf8ConstantTable;
+import com.oracle.truffle.espresso.impl.EspressoLanguageCache;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.nodes.commands.DestroyVMNode;
 import com.oracle.truffle.espresso.nodes.commands.ExitCodeNode;
 import com.oracle.truffle.espresso.nodes.commands.GetBindingsNode;
 import com.oracle.truffle.espresso.nodes.commands.ReferenceProcessNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.EspressoProperties;
 import com.oracle.truffle.espresso.runtime.EspressoThreadLocalState;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObject.StaticObjectFactory;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
+import org.graalvm.polyglot.Engine;
 
 // TODO: Update website once Espresso has one
 @Registration(id = EspressoLanguage.ID, //
@@ -136,6 +139,11 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
 
     @Override
     protected EspressoContext createContext(final TruffleLanguage.Env env) {
+        if (env.isPreInitialization() && env.getOptions().get(EspressoOptions.MultiThreaded)) {
+            // TODO (ivan-ristovic): Remove once multi-threaded support is implemented
+            throw new UnsupportedOperationException("Context pre-initialization in multi-threaded mode is not yet supported.");
+        }
+
         // TODO(peterssen): Redirect in/out to env.in()/out()
         EspressoContext context = new EspressoContext(env, this);
         context.setMainArguments(env.getApplicationArguments());
@@ -149,6 +157,10 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
 
     @Override
     protected void finalizeContext(EspressoContext context) {
+        if (context.isReadyForSerialization()) {
+            return;
+        }
+
         long elapsedTimeNanos = System.nanoTime() - context.getStartupClockNanos();
         long seconds = TimeUnit.NANOSECONDS.toSeconds(elapsedTimeNanos);
         if (seconds > 10) {
@@ -165,6 +177,46 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         }
 
         context.setFinalized();
+    }
+
+
+    @Override
+    protected boolean patchContext(EspressoContext context, TruffleLanguage.Env newEnv) {
+        if (!optionsAllowPreInitializedContext(context, newEnv)) {
+            return false;
+        }
+        context.setLanguageCache(EspressoLanguageCache.preInitialized());
+        context.setEnv(newEnv);
+        context.setMainArguments(newEnv.getApplicationArguments());
+        if (!context.isInitialized()) {
+            context.initializeContext();
+        }
+        return true;
+    }
+
+    private static boolean optionsAllowPreInitializedContext(EspressoContext context, TruffleLanguage.Env newEnv) {
+        if (newEnv.getOptions().get(EspressoOptions.DropPreInitializedContext)) {
+            return false;
+        }
+
+        final EspressoProperties.Builder builder = EspressoProperties.newPlatformBuilder();
+        builder.javaHome(Engine.findHome());
+
+        // Check if Java version is the same
+        EspressoProperties newProperties = EspressoProperties.processOptions(builder, newEnv.getOptions()).build();
+        if (!context.getJavaVersion().matchesVersion(newProperties.bootClassPathType().getJavaVersion())) {
+            return false;
+        }
+
+//         TODO (ivan-ristovic) Boot classpath equivallence check
+//        com.oracle.truffle.espresso.runtime.Classpath oldBootClassPath = context.getBootClasspath();
+//        com.oracle.truffle.espresso.runtime.Classpath newBootClassPath = new com.oracle.truffle.espresso.runtime.Classpath(newProperties.bootClasspath()
+//                .stream()
+//                .map(java.nio.file.Path::toString)
+//                .collect(java.util.stream.Collectors.joining(java.io.File.pathSeparator))
+//        );
+//        return oldBootClassPath.toString().equals(newBootClassPath.toString());
+        return true;
     }
 
     @Override
@@ -231,12 +283,16 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
 
     @Override
     protected void initializeThread(EspressoContext context, Thread thread) {
-        context.createThread(thread);
+        if (!context.isReadyForSerialization()) {
+            context.createThread(thread);
+        }
     }
 
     @Override
     protected void disposeThread(EspressoContext context, Thread thread) {
-        context.disposeThread(thread);
+        if (!context.isReadyForSerialization()) {
+            context.disposeThread(thread);
+        }
     }
 
     public static StaticProperty getArrayProperty() {

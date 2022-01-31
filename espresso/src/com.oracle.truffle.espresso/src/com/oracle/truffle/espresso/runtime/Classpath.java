@@ -351,4 +351,5 @@ public final class Classpath {
         String s = entries.toString().replace(", ", File.pathSeparator);
         return s.substring(1, s.length() - 1);
     }
+
 }
