@@ -159,6 +159,11 @@ public abstract class InstanceOf extends Node {
         static final InstanceOf INSTANCE = new ObjectClass();
 
         @Override
+        public boolean isAdoptable() {
+            return false;
+        }
+
+        @Override
         public boolean execute(Klass maybeSubtype) {
             // Faster than: return maybeSubtype.isPrimitive();
             return !(maybeSubtype instanceof PrimitiveKlass);

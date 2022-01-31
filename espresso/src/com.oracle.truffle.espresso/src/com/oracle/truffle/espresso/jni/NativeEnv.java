@@ -197,7 +197,13 @@ public abstract class NativeEnv implements ContextAccess {
                 }
             }
         });
-        return getNativeAccess().createNativeClosure(callback, lookupCallbackSignature());
+
+        try {
+            TruffleObject closure = getNativeAccess().createNativeClosure(callback, lookupCallbackSignature());
+            return RawPointer.create(getUncached().asPointer(closure));
+        } catch (UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere();
+        }
     }
 
     private CallableFromNative.Factory lookupFactory(String methodName) {
@@ -222,7 +228,11 @@ public abstract class NativeEnv implements ContextAccess {
                 }
             }), NativeSignature.create(NativeType.VOID));
             nativeClosures.add(errorClosure);
-            return errorClosure;
+            try {
+                return RawPointer.create(getUncached().asPointer(errorClosure));
+            } catch (UnsupportedMessageException e) {
+                throw EspressoError.shouldNotReachHere();
+            }
         }
 
         NativeSignature signature = factory.jniNativeSignature();
@@ -230,8 +240,11 @@ public abstract class NativeEnv implements ContextAccess {
         @Pointer
         TruffleObject nativeClosure = getNativeAccess().createNativeClosure(target, signature);
         nativeClosures.add(nativeClosure);
-        return nativeClosure;
-
+        try {
+            return RawPointer.create(getUncached().asPointer(nativeClosure));
+        } catch (UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere();
+        }
     }
 
     private static class NativeRootNode extends RootNode {

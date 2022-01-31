@@ -295,7 +295,7 @@ public class NFINativeAccess implements NativeAccess {
             @Specialization(limit = "INLINE_CACHE_SIZE", guards = "receiver == cachedReceiver")
             @SuppressWarnings("unused")
             protected static Object doCached(NativeToJavaWrapper receiver, Object[] arguments,
-                            @Cached("receiver") NativeToJavaWrapper cachedReceiver,
+                            @Cached(value = "receiver", weak = true) NativeToJavaWrapper cachedReceiver,
                             @CachedLibrary("cachedReceiver.delegate") InteropLibrary delegateInterop) throws ArityException {
                 return cachedReceiver.doExecute(arguments, delegateInterop);
             }
@@ -324,7 +324,11 @@ public class NFINativeAccess implements NativeAccess {
         TruffleObject wrappedExecutable = new JavaToNativeWrapper(executable, nativeSignature);
         TruffleObject nativeFn = (TruffleObject) uncachedSignature.createClosure(getOrCreateNFISignature(nativeSignature, false), wrappedExecutable);
         assert uncachedInterop.isPointer(nativeFn);
-        return nativeFn;
+        try {
+            return RawPointer.create(InteropLibrary.getUncached().asPointer(nativeFn));
+        } catch (UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere();
+        }
     }
 
     @ExportLibrary(InteropLibrary.class)
@@ -408,7 +412,7 @@ public class NFINativeAccess implements NativeAccess {
             @Specialization(limit = "INLINE_CACHE_SIZE", guards = "receiver == cachedReceiver")
             @SuppressWarnings("unused")
             protected static Object doCached(JavaToNativeWrapper receiver, Object[] arguments,
-                            @Cached("receiver") JavaToNativeWrapper cachedReceiver,
+                            @Cached(value = "receiver", weak = true) JavaToNativeWrapper cachedReceiver,
                             @CachedLibrary("cachedReceiver.delegate") InteropLibrary delegateInterop) throws ArityException {
                 return cachedReceiver.doExecute(arguments, delegateInterop);
             }
