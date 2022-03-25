@@ -610,11 +610,6 @@ public final class EspressoContext {
     private void prepareForSerialization() {
         getLogger().log(Level.FINE, "Preparing context for serialization");
 
-        try {
-            this.referenceDrainer.joinReferenceDrain();
-        } catch (InterruptedException e) {
-            getLogger().log(Level.FINE, "An error occurred while joining reference drainer");
-        }
         if (vm.DetachCurrentThread(this) != JNI_OK) {
             throw new RuntimeException("Could not detach current thread correctly");
         }
@@ -632,6 +627,7 @@ public final class EspressoContext {
 
         this.threadRegistry = null;
         this.threads = null;
+        this.blockingSupport = null;
         this.shutdownManager = null;
         this.referenceDrainer = null;
         this.stackOverflow = null;

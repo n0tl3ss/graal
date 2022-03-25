@@ -63,13 +63,13 @@ public final class ParserKlassCacheListSupport {
             for (String line : lines) {
                 Symbol<Symbol.Type> type = types.getOrCreate(line);
                 if (type == null) {
-                    throw EspressoError.unexpected("Found invalid internal type symbol: " + line, new IOException());
+                    throw EspressoError.fatal("Found invalid internal type symbol: " + line, new IOException());
                 }
                 typeList.add(type);
             }
             return typeList;
         } catch (IOException e) {
-            throw EspressoError.unexpected("ParserKlassCacheListProvider failed reading the class list from the specified file", e);
+            throw EspressoError.fatal("ParserKlassCacheListProvider failed reading the class list from the specified file", e);
         }
     }
 
